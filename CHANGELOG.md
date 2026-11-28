@@ -2,7 +2,7 @@
 
 All notable changes to Kiosk Satellite Ground Control are documented here.
 
-## Unreleased
+## v2026.11.18 - 2026-11-28
 
 ### Changed
 - **Learn from commands is removed.** Ground Control no longer adds commands to a person's voice on its own. A command carries whatever plays in the room under it. A voiceprint made from commands heard next to a video took the video's voice for the user's. A voice is now only made from audio you chose to add: an enrollment or a session's speech added with **Use this voice**. The **Learn from commands** switch under **Settings > Voice Match**, the `LEARN` option and the app's `learn` option are gone. If a kiosk in a new room doesn't recognize someone well, enroll once more on that kiosk.

@@ -1,5 +1,5 @@
 name: Kiosk Satellite Ground Control
-version: "2026.11.17"
+version: "2026.11.18"
 slug: kiosk_satellite_ground_control
 description: "Ground Control is a companion service for Kiosk Satellite. It runs on a computer or server in your home and handles the voice and vision processing that kiosks don't have the computing power for."
 url: https://github.com/jxlarrea/kiosk-satellite-ground-control
