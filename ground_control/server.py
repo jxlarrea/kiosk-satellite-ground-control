@@ -472,7 +472,7 @@ async def session_ws(request: web.Request) -> web.WebSocketResponse:
         session = await vm.run(vm.new_follow, policy, anchor, people, speaker, isolation, wake if first else None,
                                asked, face, align)
     else:
-        session = vm.new_session(mode=mode, policy=policy, people=people, learn=start.get("learn"))
+        session = vm.new_session(mode=mode, policy=policy, people=people)
     device_id = start.get("device_id")
     # A follow-up in a conversation joins the session of its first turn.
     joins = start.get("continues") if mode == "follow" else None
@@ -1459,6 +1459,12 @@ def _session_text(stats: dict[str, Any], events: list[dict[str, Any]]) -> str:
         parts.append(f"{stats['turns']} turns, {stats.get('released_s', 0)} s to the assistant")
     if stats.get("dropped_s"):
         parts.append(f"{stats['dropped_s']} s of other voices left out")
+    if stats.get("left_out"):
+        n = stats["left_out"]
+        parts.append(f"{n} stretch{'es' if n != 1 else ''} of another voice held and left out")
+    if stats.get("kept_out"):
+        n = stats["kept_out"]
+        parts.append(f"another voice kept from starting a turn {n} time{'s' if n != 1 else ''}")
     if stats.get("isolation_skipped"):
         n = stats["isolation_skipped"]
         parts.append(f"Isolation not used for {n} turn{'s' if n != 1 else ''}, which it returned as near silence")

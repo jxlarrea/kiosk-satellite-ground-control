@@ -37,9 +37,7 @@ You can only enroll on kiosks with **Allow enrollment here** turned on in Kiosk 
 
 Open a session where the person talked on the **Sessions** page and use **Use this voice** to add their speech from it to their voice. Only the user's speech is added. The other voices that were left out are not. This is useful for a device model nobody enrolled on yet or for a voice that has changed. See [Sessions](sessions.md#use-this-voice).
 
-### Learning
-
-With **Learn from commands** on under **Settings > Voice Match**, commands where a person was recognized with high confidence are folded into their voice. This way their voiceprint adapts to a cold or a new room without enrolling again.
+A voice is only ever made from audio you chose to add: an enrollment or a session's speech added with **Use this voice**. Nothing is added to it in the background. If a voice has changed or a kiosk in a new room doesn't recognize someone well, enroll once more on that kiosk.
 
 ## Face
 

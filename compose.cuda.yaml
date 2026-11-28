@@ -26,7 +26,6 @@ services:
       # HA_TOKEN: YOUR_LONG_LIVED_TOKEN
       # Optional, with their defaults:
       # MODEL: auto          # accurate, light or auto (Accurate on x86, Light on ARM)
-      # LEARN: "true"        # fold confident commands into each voiceprint
       # KEEP_DAYS: 7         # days saved sessions are kept
       # KEEP_AUDIO: "true"   # keep each session's audio
       # PORT: 10900

@@ -33,6 +33,8 @@ A voice counts as someone enrolled when its score against their voiceprint is ab
 
 A short command is recognized from the speech of the wake word and the command together. If that falls short of the **Threshold**, the command is scored once more as it was heard with the room around it. Only then is the voice left unknown or turned away.
 
+A kiosk that answers chosen people turns a voice away once 2 seconds of speech have named nobody. A TV talking between the wake word and the command can fill those 2 seconds before the user says anything. When the wake word came close to one of those people, the voice is therefore only turned away at the end of the command or after 6 seconds of speech. With [Isolation](#isolation) on, a command that still names nobody is run through Isolation with that person's voiceprint and scored on what comes back. A command said over a TV often reaches the **Threshold** this way when it doesn't as the kiosk heard it.
+
 In a conversation, a follow-up carries on with the person recognized in its first turn, so a one word answer like "yes" goes through.
 
 ### Confirmed by the Face
@@ -144,6 +146,17 @@ Isolation needs:
 
 Isolation answers a voiceprint it doesn't hear with near silence. Now and then it takes the user for absent in a command of about a second. A turn that comes back more than 20 dB quieter than it went in is therefore not used: the turn goes to the assistant as Trimming left it, with other voices still under the user's words. The session's page shows **Isolation not used** under **Steps** when that happens.
 
+### Another Voice After the First Command
+
+In a conversation, a TV or video that sounds a little like the user can pass a voice check after the first command and start a turn of its own. With Isolation on, every turn after the first is held until it ends, cleaned by Isolation and scored on what comes back:
+
+- **The user's turn** goes to the assistant cleaned.
+- **Another voice's turn** is left out. The kiosk is never told about it, so the assistant is not interrupted and answers nothing twice. The session's page shows **Another voice left out** under **Steps**.
+
+A follow-up reaches the assistant about a second later than it would without this, since the turn is held to its end.
+
+In 42 recorded sessions next to a video with a voice close to the user's, 29 of 31 follow-ups reached the assistant and none of the video's speech did. Without this step, 26 follow-ups and 7 stretches of the video did.
+
 While a turn is held for Isolation, a little silence is sent to keep the audio stream to Home Assistant open. This way speech-to-text that times out on a quiet stream, like Home Assistant Cloud's, still gets the command.
 
 ## Speaker Models
@@ -162,7 +175,6 @@ Ground Control picks Accurate on an NVIDIA GPU, an Apple M-series chip or an x86
 | **Recognition** | | |
 | Speaker model | auto | Accurate or Light. See [Speaker Models](#speaker-models). |
 | Threshold | 0.5 Accurate, 0.4 Light | How close a voice has to be to count as someone enrolled. Higher means fewer mix-ups and more unknown voices. Each model has its own. |
-| Learn from commands | on | Commands recognized with high confidence are folded into the speaker's voice, so it adapts to colds and room changes. |
 | Take short answers | on | Accepts a short reply like "yes" or "no" to a question from the assistant when the voice vaguely sounds like one of the people the kiosk accepts. A reply this short isn't enough to recognize who is speaking, so with this off it is ignored. Only applies to kiosks that answer chosen people. See [Short Answers](#short-answers). |
 | **Trimming** | | |
 | Other voice threshold | 0.29 Accurate, 0.26 Light | Two checks in a row under this score mean someone else is talking. |

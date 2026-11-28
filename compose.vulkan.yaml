@@ -25,7 +25,6 @@ services:
       # Optional, with their defaults:
       # MODEL: auto          # accurate, light or auto (Accurate on a CPU with more than 4 cores)
       # THREADS: 0           # threads per check, 0 is half the CPUs up to 4
-      # LEARN: "true"        # fold confident commands into each voiceprint
       # KEEP_DAYS: 7         # days saved sessions are kept
       # KEEP_AUDIO: "true"   # keep each session's audio
       # PORT: 10900

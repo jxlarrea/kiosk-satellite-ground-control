@@ -4,9 +4,11 @@ On disk, under the data directory:
 
 - ``people.json``: each person's id, name, ring color and things (to-do list,
   calendar, playlist, Home Assistant person).
-- ``voices/<id>/enroll/*.wav`` and ``voices/<id>/learned/*.wav``: the audio
-  every voiceprint is built from. It is kept so a model change rebuilds the
-  voiceprints without anyone recording again.
+- ``voices/<id>/enroll/*.wav``: the audio every voiceprint is built from. It
+  is kept so a model change rebuilds the voiceprints without anyone recording
+  again. Only audio someone chose to add is in it: an enrollment at a kiosk
+  or a session's speech added by hand. Up to 2026.11.17 confident commands
+  were also added on their own (``learned``), see ``clear_learned``.
 - ``profiles/<model>.json``: per person, the sum of unit-length window
   embeddings and their count. The voiceprint is that sum, normalized, so new
   speech folds in as an exact weighted average (Voice Incubator's profile).
@@ -33,9 +35,6 @@ from .vad import VadModel, speech_mask
 WINDOW_S = 4.0
 HOP_S = 2.0
 MIN_SPEECH_S = 1.0
-LEARNED_KEEP = 50
-"""Learned clips kept per person, oldest dropped first."""
-
 THINGS = ("todo_list", "calendar", "playlist", "person")
 COLORS = ("#56814F", "#7A5BA6", "#8A6516", "#3D64A8", "#3F7F86", "#9A4A86")
 """Ring colors that stay distinct on the Echo Dot ring."""
@@ -160,10 +159,37 @@ class People:
 
     # ── voices ────────────────────────────────────────────────────────────
 
-    def clips(self, person_id: str, kind: str | None = None) -> list[Path]:
-        base = self.dir / "voices" / person_id
-        kinds = (kind,) if kind else ("enroll", "learned")
-        return sorted(p for k in kinds for p in (base / k).glob("*.wav"))
+    def clips(self, person_id: str) -> list[Path]:
+        return sorted((self.dir / "voices" / person_id / "enroll").glob("*.wav"))
+
+    def clear_learned(self) -> list[str]:
+        """Delete the commands that were added to voices on their own, and
+        the voiceprints they are part of. Returns whose voices had any.
+
+        Up to 2026.11.17 a command recognized with confidence was folded
+        into the speaker's voiceprint. Whatever played in the room under it
+        went in with it, and a voiceprint made from commands heard with a
+        video playing then took the video's voice for the user's. A
+        voiceprint is now only made from audio someone chose to add.
+
+        The voiceprints of the people it affected are dropped for every
+        model, so they are built again from the enrollments alone."""
+        cleared: list[str] = []
+        for folder in sorted((self.dir / "voices").glob("*/learned")):
+            had = False
+            for f in folder.glob("*"):
+                had = had or f.suffix == ".wav"
+                f.unlink()
+            folder.rmdir()
+            if had:
+                cleared.append(folder.parent.name)
+        if cleared:
+            with self._lock:
+                for f in sorted((self.dir / "profiles").glob("*.json")):
+                    profiles = self._model_profiles(f.stem)
+                    if any(profiles.pop(pid, None) is not None for pid in cleared):
+                        self._save_profiles(f.stem)
+        return cleared
 
     def speech_seconds(self, person_id: str) -> float:
         return sum((f.stat().st_size - 44) / 2 / SAMPLE_RATE for f in self.clips(person_id))
@@ -217,7 +243,7 @@ class People:
         """Each enrollment, newest first, with where it was recorded when known."""
         known = {r["id"]: r for r in self._records(person_id)}
         out = []
-        for clip in self.clips(person_id, "enroll"):
+        for clip in self.clips(person_id):
             r = known.get(clip.stem) or {"id": clip.stem, "seconds": round((clip.stat().st_size - 44) / 2 / SAMPLE_RATE, 1),
                                          "at": clip.stat().st_mtime, "device_id": None, "device_name": None, "model": None}
             out.append(r)
@@ -248,15 +274,6 @@ class People:
             else:
                 profiles.pop(person_id, None)
             self._save_profiles(model_key)
-
-    def learn(self, person_id: str, speech: np.ndarray, embedding: np.ndarray, model_key: str) -> None:
-        """Fold one confident command into the voiceprint and keep its audio."""
-        folder = self.dir / "voices" / person_id / "learned"
-        write_wav(folder / f"{time.time_ns()}.wav", speech)
-        old = sorted(folder.glob("*.wav"))[:-LEARNED_KEEP]
-        for f in old:
-            f.unlink()
-        self._fold(model_key, person_id, [embedding])
 
     def rebuild(self, model_key: str, embedder: Embedder) -> None:
         """Rebuild every voiceprint for a model from the kept audio."""

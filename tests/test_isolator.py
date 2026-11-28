@@ -13,6 +13,7 @@ import pytest
 from ground_control.follow import Follow, FollowConfig
 from ground_control.isolator import WINDOW, Isolator
 from ground_control.models import ISOLATOR_FILE, SPEAKER_MODELS
+from ground_control.vad import FRAME
 
 from .conftest import MODELS, SR, chunks
 from .test_follow import Script, held_out, household, of, silence  # noqa: F401 - household is a fixture
@@ -64,7 +65,9 @@ def test_a_turn_goes_out_cleaned_when_it_ends(household, speakers, voice, vad, e
     raw = s.audio
     expected = np.concatenate([raw[a:b] for a, b in f.released]) * 0.5
     assert np.allclose(sent, expected)
-    assert s.released_from("tv", f.released) <= 0.5
+    # A turn after the first is held with a little of the speech before it (``judge_lead_s``),
+    # here the TV's last half second: the real Isolation takes that out, this stand-in doesn't.
+    assert s.released_from("tv", f.released) <= 0.7
     assert "isolated_ms" in of(events, "stats")[0]
     # The saved audio is the speech alone, without the silence.
     assert np.allclose(f.cleaned_audio(), expected)
@@ -419,3 +422,165 @@ def test_short_answers_follow_what_the_kiosk_says_and_the_setting(cfg):
         again.close()
     finally:
         vm.close()
+
+
+def test_a_later_turn_is_judged_on_what_isolation_returns(household, speakers, voice, vad, embedder, isolator):
+    """With ``judge_later_turns`` a turn after the first is held, cleaned by
+    Isolation and judged on the result before the kiosk hears of it. The
+    user's follow-up goes out, a stretch of the TV that the checks alone
+    might take for the user does not, and nothing is announced for it."""
+    people, _, _ = household
+    user, tv = held_out(speakers[0]), voice[speakers[2]]["test"]
+    s = (Script().add("quiet", silence(0.3)).add("user", user[2 * SR:5 * SR]).add("quiet", silence(1.0))
+         .add("tv", tv[:4 * SR]).add("quiet", silence(1.0)).add("user", user[6 * SR:8 * SR]).add("quiet", silence(1.5)))
+    cfg = FollowConfig()
+    f = Follow(cfg, ACCURATE, embedder, vad, people, anchor=user[: int(1.2 * SR)], isolator=isolator)
+    events = [e for c in chunks(s.audio) for e in f.feed(c)] + f.finish()
+    stats = of(events, "stats")[0]
+    assert stats["turns"] == 2 and s.released_from("tv", f.released) < 0.3
+    assert s.released_from("user", f.released) > 3.5
+    # The second turn was judged, and its start came with its audio once it had passed.
+    judged = [p for p in f.timeline if p.get("judged")]
+    assert judged and not judged[-1].get("left_out")
+    kinds = [e["type"] for e in events if e["type"] in ("turn_start", "turn_end") or (e["type"] == "audio" and not e.get("keepalive"))]
+    second = len(kinds) - 1 - kinds[::-1].index("turn_start")
+    assert kinds[second + 1] == "audio" and kinds[-1] == "turn_end"
+    assert [e["turn"] for e in of(events, "turn_start")] == [1, 2]
+
+    # The same session with the TV's stretch forced over the line a held turn needs: it is held,
+    # judged and left out, and the kiosk is told of two turns, never of that one.
+    f = Follow(cfg, ACCURATE, embedder, vad, people, anchor=user[: int(1.2 * SR)], isolator=isolator)
+    tv_a, tv_b = next((a, b) for who, a, b in s.spans if who == "tv")
+    label = f._label
+
+    def as_user(frame, final):
+        out = label(frame, final)
+        if out == "other" and tv_a + SR // 2 <= frame * FRAME < tv_b - SR // 2 and f.turns >= 1:
+            f._label_score = 0.45
+            return "user"
+        return out
+
+    f._label = as_user
+    events = [e for c in chunks(s.audio) for e in f.feed(c)] + f.finish()
+    stats = of(events, "stats")[0]
+    assert stats["turns"] == 2 and stats["left_out"] >= 1
+    assert [e["turn"] for e in of(events, "turn_start")] == [1, 2] and len(of(events, "turn_end")) == 2
+    assert s.released_from("tv", f.released) < 0.3 and s.released_from("user", f.released) > 3.5
+    sent = sum(len(e["audio"]) for e in of(events, "audio") if not e.get("keepalive"))
+    assert sent == sum(b - a for a, b in f.released)
+
+    # Turned off, or without Isolation, nothing is held to be judged.
+    f = Follow(FollowConfig(judge_later_turns=False), ACCURATE, embedder, vad, people, anchor=user[: int(1.2 * SR)],
+               isolator=isolator)
+    events = [e for c in chunks(s.audio) for e in f.feed(c)] + f.finish()
+    assert not [p for p in f.timeline if p.get("judged")]
+    f = Follow(FollowConfig(), ACCURATE, embedder, vad, people, anchor=user[: int(1.2 * SR)])
+    events = [e for c in chunks(s.audio) for e in f.feed(c)] + f.finish()
+    assert not [p for p in f.timeline if p.get("judged")] and of(events, "stats")[0]["turns"] == 2
+
+
+class Keeps:
+    """Stands in for the isolator: keeps what is inside ``spans`` of the
+    stream and returns the rest as silence."""
+
+    def __init__(self, spans: list[tuple[int, int]]) -> None:
+        self.spans, self.calls, self.follow = spans, 0, None
+
+    def clean(self, audio: np.ndarray, voiceprint: np.ndarray) -> np.ndarray:
+        self.calls += 1
+        at = self.follow.n - len(audio)
+        out = np.zeros_like(audio)
+        for a, b in self.spans:
+            a, b = max(a - at, 0), min(b - at, len(audio))
+            if b > a:
+                out[a:b] = audio[a:b]
+        return out
+
+
+def test_a_voice_is_turned_away_at_the_end_of_the_first_turn_on_what_isolation_returns(household, speakers, voice, vad,
+                                                                                    embedder):
+    """A kiosk that answers chosen people, a wake word that came close to one
+    of them without naming them and a TV talking through the wait before the
+    command. The TV's two seconds used to turn the session away before the
+    user spoke. With ``reject_late`` it is decided when the turn ends, on
+    what Isolation returns for it."""
+    people, ana, _ = household
+    user, tv = held_out(speakers[0]), voice[speakers[2]]["test"]
+    s = (Script().add("quiet", silence(0.3)).add("tv", tv[:3 * SR]).add("user", user[2 * SR:int(3.5 * SR)])
+         .add("quiet", silence(1.5)))
+    tv_a, tv_b = next((a, b) for who, a, b in s.spans if who == "tv")
+    user_a, user_b = next((a, b) for who, a, b in s.spans if who == "user")
+
+    def session(isolator, audio=None, **cfg):
+        f = Follow(FollowConfig(policy="people", people=(ana.id,), **cfg), ACCURATE, embedder, vad, people,
+                   anchor=user[: int(1.2 * SR)], isolator=isolator)
+        if isolator is not None:
+            isolator.follow = f
+        # The wake word names nobody, the TV is taken for the user and nothing the kiosk heard names them.
+        assert f._identified and f.speaker["by"] == "wake_word"
+        f._identified, f.speaker, f._pending_events = False, None, []
+        f._follow_likely(f._rows @ f._anchor_emb, f._anchor_emb)
+        named = f._named_by
+        f._named_by = lambda scores, best, by="voice": named(scores, best, by) if f._held_look else None
+        f._held_look = False
+        look = f._isolated_look
+
+        def isolated_look(events, at, last):
+            f._held_look = True
+            try:
+                return look(events, at, last)
+            finally:
+                f._held_look = False
+
+        f._isolated_look = isolated_look
+        label = f._label
+
+        def as_user(frame, final):
+            out = label(frame, final)
+            return "user" if out == "other" and f.turns <= 1 else out
+
+        f._label = as_user
+        events = [e for c in chunks(s.audio if audio is None else audio) for e in f.feed(c)] + f.finish()
+        return f, events
+
+    # As it was: turned away two seconds into the TV, before the user's first word.
+    f, events = session(Keeps([(user_a, user_b)]), reject_late=False)
+    assert of(events, "stats")[0]["rejected"] and of(events, "rejected")[0]["t"] * SR < user_a
+    assert f.isolator.calls == 0
+
+    # Now: the turn runs to its end, Isolation keeps the user's words and those name them.
+    iso = Keeps([(user_a, user_b)])
+    f, events = session(iso)
+    stats = of(events, "stats")[0]
+    assert not stats["rejected"] and stats["speaker"]["id"] == ana.id and stats["speaker"]["by"] == "voice"
+    looks = [p for p in f.timeline if p["kind"] == "identify" and p.get("isolated")]
+    # A first look where the session used to be turned away, with only the TV in so far, and one at the end.
+    assert len(looks) == 2 and "score" not in looks[0] and looks[1]["score"] >= ACCURATE.threshold
+    # No third run of Isolation: what recognized the user is what goes out.
+    assert iso.calls == 2
+    sent = np.concatenate([e["audio"] for e in of(events, "audio") if not e.get("keepalive")])
+    assert float(np.abs(sent).max()) > 0.01
+    assert [e["type"] for e in events if e["type"] in ("speaker", "turn_start", "turn_end", "rejected")][-1] == "turn_end"
+
+    # Isolation hears none of that person in the turn: turned away at its end.
+    iso = Keeps([])
+    f, events = session(iso)
+    assert of(events, "stats")[0]["rejected"] and iso.calls == 2
+    assert of(events, "rejected")[0]["t"] * SR >= user_b - SR // 2
+    assert not [e for e in of(events, "audio") if not e.get("keepalive")]
+
+    # A voice that talks on and on is turned away at ``reject_late_s`` of speech.
+    long_tv = np.concatenate([silence(0.3), np.tile(tv[:4 * SR], 3)])
+    iso = Keeps([])
+    f, events = session(iso, audio=long_tv)
+    assert of(events, "stats")[0]["rejected"] and iso.calls == 2
+    assert 6.0 <= of(events, "rejected")[0]["t"] <= 8.0
+
+    # A wake word that isn't close to anyone the kiosk answers gets no more time than before.
+    f = Follow(FollowConfig(policy="people", people=(ana.id,)), ACCURATE, embedder, vad, people,
+               anchor=tv[4 * SR:int(5.2 * SR)], isolator=Keeps([]))
+    f.isolator.follow = f
+    assert not f._wake_close
+    events = [e for c in chunks(long_tv) for e in f.feed(c)] + f.finish()
+    assert f.isolator.calls == 0
+    assert of(events, "stats")[0]["rejected"] and not [p for p in f.timeline if p.get("isolated")]

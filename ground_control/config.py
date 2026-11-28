@@ -30,7 +30,6 @@ Variable             Meaning                                      Default
                      signs in the web UI, so it opens with no
                      login for anyone who can reach the port
 ``PORT``             the service port                             ``10900``
-``LEARN``            learn from confident commands                ``true``
 ``AUTH``             ``homeassistant`` or ``none`` (testing)      ``homeassistant``
 ``KEEP_DAYS``        days saved sessions are kept                 ``7``
 ``KEEP_AUDIO``       keep each session's audio                    ``true``
@@ -63,7 +62,6 @@ class Config:
     cuda: bool
     ha_url: str
     port: int
-    learn: bool
     auth: str
     keep_days: int = 7
     keep_audio: bool = True
@@ -123,7 +121,6 @@ def load() -> Config:
         cuda=cuda,
         ha_url=str(get("HA_URL", "auto" if os.environ.get("SUPERVISOR_TOKEN") else "http://homeassistant:8123")).rstrip("/"),
         port=int(get("PORT", 10900)),
-        learn=_bool(get("LEARN", "true")),
         auth=auth,
         keep_days=int(get("KEEP_DAYS", 7)),
         keep_audio=_bool(get("KEEP_AUDIO", "true")),

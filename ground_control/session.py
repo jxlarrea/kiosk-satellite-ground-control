@@ -43,7 +43,6 @@ class SessionConfig:
     policy: Literal["anyone", "enrolled", "people"] = "anyone"
     people: tuple[str, ...] = ()
     """With the people policy, the only people this device answers."""
-    learn: bool = True
     hold_back_s: float | None = None
     """Gated mode lag. None: long enough to catch another voice before it is released."""
     eos_silence_s: float = 0.7
@@ -61,9 +60,6 @@ class SessionConfig:
     own_reference_s: float = 2.0
     check_window_s: float = 1.0
     check_speech_fraction: float = 0.5
-    learn_margin: float = 0.05
-    learn_runner_up: float = 0.10
-    learn_min_speech_s: float = 2.0
 
 
 @dataclass
@@ -162,7 +158,6 @@ class Session:
         events: list[dict[str, Any]] = []
         if self.cfg.mode == "gated":
             self._release(events, final=True)
-        learned = self._maybe_learn()
         t = self._t
         events.append({
             "type": "stats",
@@ -174,7 +169,6 @@ class Session:
             "lowest_check": None if t.lowest_check is None else round(t.lowest_check, 3),
             "cpu_ms": round(self._cpu * 1000),
             "wall_ms": round((time.monotonic() - self._started) * 1000),
-            "learned": learned,
             "model": self.model.key,
         })
         return events
@@ -354,20 +348,3 @@ class Session:
         for start, stop in self._silenced:
             out[start:self.n if stop is None else stop] = 0.0
         return out
-
-    # ── learning ──────────────────────────────────────────────────────────
-
-    def _maybe_learn(self) -> bool:
-        cfg, t = self.cfg, self._t
-        if not cfg.learn or not t.speaker or t.speaker.get("by") != "voice" or t.identify_embedding is None:
-            return False
-        best = t.best[0][1]
-        runner = t.best[1][1] if len(t.best) > 1 else -1.0
-        if best < self.model.threshold + cfg.learn_margin or best - runner < cfg.learn_runner_up:
-            return False
-        idx = [i for i in t.speech_idx if t.cut is None or (i + 1) * FRAME <= t.cut]
-        if len(idx) * FRAME < cfg.learn_min_speech_s * SR:
-            return False
-        speech = np.concatenate([self._buf[i * FRAME:(i + 1) * FRAME] for i in idx])
-        self.people.learn(t.speaker["id"], speech, t.identify_embedding, self.model.key)
-        return True

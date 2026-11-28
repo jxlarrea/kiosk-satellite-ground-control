@@ -870,3 +870,46 @@ def test_a_command_said_in_one_breath_with_the_wake_word_starts_at_its_end(house
     events += f.finish()
     assert of(events, "turn_start")[0]["t"] <= 0.3 and f.released[0][0] == int(0.15 * SR)
     assert not of(events, "rejected")
+
+
+def test_a_later_turn_is_compared_with_the_voices_of_its_own_session(household, speakers, voice, vad, embedder):
+    """Next to a voice a little like the user's, the voiceprint alone can let
+    that voice start a turn. Once a session has heard another voice, speech
+    that would start a later turn is compared with that voice and with the
+    user as the session heard them, and starts no turn when it is closer to
+    the other one."""
+    people, _, _ = household
+    user, tv = held_out(speakers[0]), voice[speakers[2]]["test"]
+    s = (Script().add("quiet", silence(0.3)).add("user", user[2 * SR:5 * SR]).add("quiet", silence(1.0))
+         .add("tv", tv[:4 * SR]).add("quiet", silence(1.0)).add("user", user[6 * SR:8 * SR]).add("quiet", silence(1.5)))
+    on = FollowConfig(session_voices=True)
+    f = Follow(on, ACCURATE, embedder, vad, people, anchor=user[: int(1.2 * SR)])
+    events = [e for c in chunks(s.audio) for e in f.feed(c)] + f.finish()
+    stats = of(events, "stats")[0]
+    # The user's second turn started, after being compared: the TV had been heard by then.
+    assert stats["turns"] == 2 and "kept_out" not in stats
+    compared = [p for p in f.timeline if p["kind"] == "voices"]
+    assert compared and not compared[-1]["kept_out"] and compared[-1]["user"] > compared[-1]["other"] + 0.2
+    assert s.released_from("tv", f.released) < 0.3
+
+    # The TV's own speech, asked the same question: closer to the other voice. Its last second is
+    # compared with the checks of its first seconds.
+    tv_span = next((a, b) for who, a, b in s.spans if who == "tv")
+    at = min((c for c, _ in f._checks if tv_span[1] - SR <= c <= tv_span[1] - SR // 2), default=None)
+    assert at is not None
+    f._start_calls.clear()
+    assert f._closer_to_other(at, at // FRAME, final=True) is True
+    assert f.kept_out == 1 and [p for p in f.timeline if p["kind"] == "voices"][-1]["kept_out"] is True
+
+    # A session that heard no other voice compares nothing.
+    quiet = (Script().add("quiet", silence(0.3)).add("user", user[2 * SR:5 * SR]).add("quiet", silence(1.5))
+             .add("user", user[6 * SR:8 * SR]).add("quiet", silence(1.5)))
+    f = Follow(on, ACCURATE, embedder, vad, people, anchor=user[: int(1.2 * SR)])
+    events = [e for c in chunks(quiet.audio) for e in f.feed(c)] + f.finish()
+    assert of(events, "stats")[0]["turns"] == 2 and not [p for p in f.timeline if p["kind"] == "voices"]
+    assert f._first_turn_emb is None        # and embeds nothing more for it
+
+    # Off, as it is unless asked for, nothing is compared.
+    f = Follow(FollowConfig(), ACCURATE, embedder, vad, people, anchor=user[: int(1.2 * SR)])
+    events = [e for c in chunks(s.audio) for e in f.feed(c)] + f.finish()
+    assert of(events, "stats")[0]["turns"] == 2 and not [p for p in f.timeline if p["kind"] == "voices"]

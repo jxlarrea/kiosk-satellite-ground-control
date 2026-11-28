@@ -101,6 +101,31 @@ class FollowConfig:
     end of the command is Ground Control's (``eos_silence_s``)."""
     identify_after_s: float = 1.0
     reject_after_s: float = 2.0
+    reject_late: bool = True
+    """A device that answers only enrolled or chosen people, a wake word that
+    named nobody but came close to one of them (the other-voice line or
+    more), and ``reject_after_s`` of speech since that named nobody either:
+    the session isn't turned away there. It is decided when the first turn
+    ends, or at ``reject_late_s`` of speech.
+
+    With a realtime assistant the user waits for the ready chime before the
+    command, a second and a half or more. A video playing through that wait
+    is taken for the user's speech and used the whole ``reject_after_s`` up
+    in three of five real sessions that were turned away next to one. In the
+    other two the command over the video fell just short (0.46 and 0.498).
+
+    With Isolation the decision is made on what it returns for the turn,
+    with the voiceprint of the closest of those people (``_isolated_look``):
+    the loudest ``answer_window_s`` of it has to reach the recognition
+    threshold. Those five commands scored 0.54 to 0.62 that way and 0.31 to
+    0.50 as the kiosk heard them. Of the same video's 18 stretches held as a
+    turn, Isolation returned 16 as near silence and the other two scored
+    0.43 and 0.47. It runs only for a session that would otherwise be
+    turned away, twice at most: where it used to be turned away, which
+    names a user who has said the command by then, and at the end."""
+    reject_late_s: float = 6.0
+    """The most speech a session waits for under ``reject_late``. A TV that
+    talks on after a wake word of its own never ends the turn."""
     min_anchor_speech_s: float = 0.3
     max_turn_s: float = 30.0
     keep_s: float = 120.0
@@ -115,6 +140,99 @@ class FollowConfig:
     other-voice line toward the recognized one (0.395 with Accurate). The TV
     scoring just over the other-voice line once the user is done must not
     start a turn: in a realtime conversation that stops the answer."""
+    judge_later_turns: bool = True
+    """With Isolation: a turn after the first is held, judged on what
+    Isolation returns for it and only then announced and sent, or left out.
+
+    A check is a second of whatever the microphone hears. Next to a video as
+    loud as the user and a little like them, a second of the user talking
+    over it is mostly the video, and a second of the video alone can pass for
+    the user. No line on such a check keeps one out without losing the other.
+    Isolation is what separates two voices that talk at once: run over the
+    saved sessions of such a test whole, it returned the user's follow-up in
+    nearly every one, including those the checks had lost, and little of the
+    video.
+
+    So after the first turn a stretch of speech only has to reach the
+    other-voice line to be held as a turn that may be the user's
+    (``next_turn_share`` no longer applies). When it ends, Isolation runs on
+    it as on any turn. Returned as near silence, it is the user's only if
+    the turn as a whole reaches the line a turn starts on today: of the
+    video's stretches that came back as silence the best scored 0.36, and a
+    follow-up of the user's that Isolation took for absent 0.43. Otherwise
+    what Isolation returned is compared with the user and with the session's
+    other voice (``judge_margin``, ``judge_line``). A turn that fails is
+    left out and the kiosk never hears of it: no turn starts, so the
+    assistant's answer isn't stopped and no empty turn is ended."""
+    judge_line: float = 0.38
+    """In a session that heard no other voice, what Isolation's output for a
+    later turn has to score against the user: their voiceprint or their
+    voice as this session heard it, whichever is closer."""
+    judge_margin: float = 0.08
+    """In a session that heard another voice, Isolation's output has to be
+    this much closer to the user than to that voice. On 42 saved sessions
+    next to a video, the 4 turns of the video that Isolation returned whole
+    were at most 0.05 closer to the user, and the user's 23 turns in those
+    sessions at least 0.10."""
+    judge_retry_strong_only: bool = True
+    judge_weak_margin: float = -0.06
+    """Isolation is the expensive part, so speech that only came in on the
+    lower line is not all handed to it. When its checks are closer to the
+    session's other voice than to the user by more than this, it is left out
+    without running Isolation. Of 35 such stretches of a video, the 24 that
+    had another voice to be compared with were closer to it by 0.08 to 0.28.
+    The user's three follow-ups that came in on the lower line were at
+    +0.15, +0.01 and -0.04. Speech that reaches the line a turn starts on
+    today is always handed to Isolation, as it is today."""
+    judge_lead_s: float = 0.6
+    judge_tail_s: float = 1.0
+    """A turn that is judged takes this much of the speech before its first
+    check over the line and after its last, whoever the checks took it for.
+    Over a loud video the user's "okay, thank you" had one check at 0.38 and
+    the next at 0.28, so half the phrase was labeled the video's. Isolation
+    takes the video out of what is held, which the checks can't."""
+    session_voices: bool = False
+    """Off: on a live kiosk it kept the user's own follow-up out once in 8
+    conversations, see the end of this text.
+
+    A turn after the first only starts on a voice that is closer to the
+    user as heard in this session (the wake word and the first turn) than to
+    the other voice heard in it (the checks under the other-voice line since
+    the first turn).
+
+    The voiceprint alone can't always tell: everything a kiosk hears shares
+    that kiosk's sound, and next to a video whose voice is a little like the
+    user's, the user's own clean turn scored 0.47 against their voiceprint
+    and 0.46 against the video's voice. Compared with both voices as this
+    session heard them, the video's turns were closer to the other voice by
+    0.23, 0.13 and 0.06, and the user's were closer to the user: by 0.04
+    talking over that video, 0.05 to 0.14 in the same sessions without it
+    and 0.13 or more in 50 turns of other sessions (median 0.37).
+
+    It is decided where a turn would start, on its first checks, so nothing
+    is taken back afterwards and it doesn't need Isolation. A session that
+    heard no other voice is not affected.
+
+    Live, next to that video (24 conversations): it kept the video from
+    starting a turn twice, let two fragments of 0.2 and 0.4 s through, and
+    once kept out the user's "ok thank you" said over the video (0.49 to the
+    user, 0.59 to the other voice): a second of the user talking over a
+    voice as loud as theirs is mostly that voice. Losing the user's words is
+    the worse mistake, so it stays off until a turn can be judged on what
+    Isolation makes of it."""
+    session_other_checks: int = 2
+    """This many checks of another voice, at least, to compare with."""
+    session_other_gap_s: float = 0.5
+    """The other voice's checks are those whose middle is at least this long
+    before the speech in question. With 3 checks a second or more before it,
+    a video that cut in 1.5 s after the user's command had nothing to be
+    compared with and took a turn. With 2 checks half a second before it,
+    that turn no longer starts, and on 387 real sessions nothing else
+    changes."""
+    session_start_checks: int = 3
+    """The first checks of the speech a turn would start on, taken together:
+    one of the video's turns began on a check that was closer to the user
+    by 0.13 and was closer to the video on the next two."""
     keepalive_every_s: float = 0.5
     keepalive_s: float = 0.02
     """Home Assistant Cloud's speech-to-text gives up on a stream that gets
@@ -230,6 +348,24 @@ class Follow:
         self.n = 0
         self._speech: list[bool] = []
         self._checks: list[tuple[int, float]] = []
+        self._check_embs: dict[int, np.ndarray] = {}
+        """Each check's embedding by the middle of its window, to compare with the session's voices."""
+        self._tentative = False
+        """A turn after the first that is held to be judged: the kiosk hasn't been told of it."""
+        self._label_score = 0.0
+        self._turn_peak = 0.0
+        """The best check a turn's speech was labeled the user's on."""
+        self._tentative_events: list[dict[str, Any]] = []
+        self.left_out = 0
+        """Turns after the first that were held, judged on Isolation's output and left out."""
+        self._first_turn: tuple[int, int] | None = None
+        self._first_turn_emb: np.ndarray | None = None
+        """The first turn's audio as one embedding, made the first time a later turn is compared with it."""
+        self._first_turn_end = 0
+        self._start_calls: dict[int, bool] = {}
+        self._kept_out_runs: set[tuple[int, bool]] = set()
+        self.kept_out = 0
+        """Stretches of speech that started no turn for being closer to the session's other voice."""
         self._next_check = 0
         self._run_scores: dict[int, float] = {}
 
@@ -246,6 +382,14 @@ class Follow:
         self.speaker: dict[str, Any] | None = None
         self._identified = False
         self._rejected = False
+        self._likely: int | None = None
+        """On a device that answers only some voices: the closest of them to a wake word that named nobody."""
+        self._wake_close = False
+        """Whether that wake word reached the other-voice line against them, see ``reject_late``."""
+        self._looks = 0
+        self._look_speech = 0
+        self._look: tuple[int, int, np.ndarray, np.ndarray] | None = None
+        """What Isolation returned for ``_isolated_look``, for the turn to go out with: from, to, voiceprint, audio."""
 
         # Turns and what was released.
         self._decided = 0
@@ -356,6 +500,8 @@ class Follow:
         if not allowed:
             return
         likely = max(allowed, key=lambda i: float(scores[i]))
+        self._likely = likely
+        self._wake_close = float(scores[likely]) >= self.model.other_threshold
         ref = 2 * self._rows[likely] + emb
         self._ref = ref / max(float(np.linalg.norm(ref)), 1e-9)
         self._ref_kind = "likely"
@@ -407,6 +553,9 @@ class Follow:
     def finish(self) -> list[dict[str, Any]]:
         events, self._pending_events = self._pending_events, []
         self._decide(events, final=True)
+        if self.in_turn and self.turns == 1 and self._held:
+            # A held first turn settles who the user is as it ends, see ``_end_turn``.
+            self._end_turn(events)
         if self._ref_kind == "likely" and not self._identified and self._heard:
             self._identify_heard(events, self.n, final=True)
         if self.in_turn:
@@ -428,6 +577,8 @@ class Follow:
             **({"isolated_ms": self.isolated_ms} if self.isolator is not None else {}),
             **({"isolation_skipped": self.isolation_skipped} if self.isolation_skipped else {}),
             **({"isolation_failed": self.isolation_failed} if self.isolation_failed else {}),
+            **({"kept_out": self.kept_out} if self.kept_out else {}),
+            **({"left_out": self.left_out} if self.left_out else {}),
             **({"wake_word_s": round(self._wake_end / SR, 2)} if self.wake_word and self.wake_word["found"] else {}),
             "wall_ms": round((time.monotonic() - self._started) * 1000),
             "model": self.model.key,
@@ -444,6 +595,7 @@ class Follow:
             self._base += drop
             keep_from = self._base
             self._checks = [c for c in self._checks if c[0] >= keep_from - self._win]
+            self._check_embs = {c: e for c, e in self._check_embs.items() if c >= keep_from - self._win}
 
     # ── the end of the wake word ──────────────────────────────────────────
 
@@ -517,6 +669,7 @@ class Follow:
         if self._ref_kind == "anchor":
             score += self.cfg.anchor_slack
         self._checks.append((end - self._win // 2, score))
+        self._check_embs[end - self._win // 2] = emb
         self.timeline.append({"t": round(end / SR, 3), "kind": "check", "score": round(score, 3),
                               "low": score < self.model.other_threshold, "turn": self.turns})
 
@@ -553,7 +706,14 @@ class Follow:
         if self.in_turn or self.turns == 0:
             return None
         m = self.model
+        if self._judging():
+            return m.other_threshold  # held and judged at its end, see ``judge_later_turns``
         return m.other_threshold + self.cfg.next_turn_share * (m.threshold - m.other_threshold)
+
+    def _judging(self) -> bool:
+        """Whether turns after the first are held and judged on Isolation's output."""
+        return (self.cfg.judge_later_turns and self.isolator is not None and self.model.key == ISOLATOR_MODEL
+                and self._ref is not None and self._ref_kind != "household")
 
     def _label(self, f: int, final: bool) -> str | None:
         """user or other for speech frame ``f``, or None to wait for its check."""
@@ -567,11 +727,21 @@ class Follow:
         center = (fs + fe) // 2
         near = [c for c in self._checks if abs(c[0] - center) <= self._win * 6 // 10]
         if near:
-            _, score = min(near, key=lambda c: abs(c[0] - center))
+            at, score = min(near, key=lambda c: abs(c[0] - center))
             if score < self.model.other_threshold and self._waiting_for_household(final):
                 return None
-            line = self._start_line() or self.model.other_threshold
-            return "user" if score >= line else "other"
+            start = self._start_line()
+            self._label_score = score
+            if score < (start or self.model.other_threshold):
+                return "other"
+            if start is not None:
+                # A turn after the first would start here.
+                other = self._closer_to_other(at, f, final)
+                if other is None:
+                    return None
+                if other:
+                    return "other"
+            return "user"
         # Too little speech around it for a check: a word on its own.
         r0, r1 = self._run(f)
         if (r1 - r0) * FRAME < self.cfg.blip_s * SR:
@@ -592,6 +762,55 @@ class Follow:
             return None
         line = self._start_line() or self.model.other_threshold - 0.05
         return "user" if score >= line else "other"
+
+    def _closer_to_other(self, at: int, f: int, final: bool) -> bool | None:
+        """Whether the speech a turn after the first would start on, at the
+        check in the middle of ``at``, is closer to the other voice this
+        session heard than to its user (``session_voices``). None to wait for
+        the checks that follow it. False when there is nothing to compare."""
+        cfg = self.cfg
+        if at in self._start_calls:
+            return self._start_calls[at]
+        if not cfg.session_voices or self._first_turn is None:
+            return False
+        # The other voice: checks under the other-voice line since the first
+        # turn, whose windows ended before this one's began.
+        other = [self._check_embs[c] for c, s in self._checks
+                 if s < self.model.other_threshold and self._first_turn_end < c <= at - int(cfg.session_other_gap_s * SR)
+                 and c in self._check_embs]
+        if len(other) < cfg.session_other_checks:
+            return False
+        if self._first_turn_emb is None:
+            a, b = self._first_turn
+            if a >= self._base and b - a >= SR // 2:
+                self._first_turn_emb = self.embedder.embed(self._audio(a, b))
+        user = [e for e in (self._anchor_emb, self._first_turn_emb) if e is not None]
+        if not user:
+            return False
+        last = at + (cfg.session_start_checks - 1) * self._cadence + self._cadence // 2
+        mine = [self._check_embs[c] for c, _ in self._checks if at <= c <= last and c in self._check_embs]
+        if len(mine) < cfg.session_start_checks and not final:
+            _, r1 = self._run(f)
+            still_talking = r1 >= len(self._speech)
+            if still_talking and self.n < last + self._win // 2 + self._cadence:
+                return None  # its next checks are still to come
+        u = np.sum(user, axis=0)
+        o = np.sum(other, axis=0)
+        u, o = u / max(float(np.linalg.norm(u)), 1e-9), o / max(float(np.linalg.norm(o)), 1e-9)
+        to_user = float(np.mean([u @ e for e in mine]))
+        to_other = float(np.mean([o @ e for e in mine]))
+        out = to_other > to_user
+        self._start_calls[at] = out
+        r0, _ = self._run(f)
+        key = (r0, out)
+        if key not in self._kept_out_runs:
+            # Once for a stretch of speech and outcome, not for every frame of it.
+            self._kept_out_runs.add(key)
+            if out:
+                self.kept_out += 1
+            self.timeline.append({"t": round(at / SR, 3), "kind": "voices", "user": round(to_user, 3),
+                                  "other": round(to_other, 3), "kept_out": out, "turn": self.turns})
+        return out
 
     def _wake_word_tail(self, f: int, final: bool) -> bool | None:
         """Whether the speech at frame ``f`` is still the wake word: a run of
@@ -648,8 +867,9 @@ class Follow:
         fs, fe = f * FRAME, (f + 1) * FRAME
         # The frame the wake word ends in counts from where it ends.
         fs = max(fs, min(self._wake_end, fe))
+        keep = cfg.judge_tail_s if self._tentative else cfg.tail_keep_s
         tail = (label == "other" and self.in_turn and self._prev_label in ("user", "tail")
-                and fe - self._heard_user_end <= int(cfg.tail_keep_s * SR))
+                and fe - self._heard_user_end <= int(keep * SR))
         self._prev_label = "tail" if tail else label
         if tail:
             # The end of the user's word, not the other voice yet: released, nothing more.
@@ -658,6 +878,7 @@ class Follow:
             return
         if label == "user":
             self._heard_user_end = fe
+            self._turn_peak = max(self._turn_peak, self._label_score)
         if label in ("user", "other") and self._ref_kind == "likely" and not self._identified:
             self._heard.append((fs, fe))
             self._identify_heard(events, fe, final=False)
@@ -665,14 +886,22 @@ class Follow:
                 return
         if label == "user":
             if not self.in_turn:
+                self._tentative = self.turns >= 1 and self._judging()
+                self._tentative_events = []
+                self._turn_peak = 0.0
                 self.in_turn = True
                 self.turns += 1
                 self._turn_start = fs
                 self._other_reported = False
                 self._turn_user_s = 0.0
-                events.append({"type": "turn_start", "t": round(fs / SR, 3), "turn": self.turns})
-                pad_from = max(fs - int(cfg.pad_s * SR), self._last_other_end, self._decided_floor(),
-                               self._wake_end)
+                if not self._tentative:
+                    events.append({"type": "turn_start", "t": round(fs / SR, 3), "turn": self.turns})
+                if self._tentative:
+                    # Held and cleaned by Isolation: the speech before it comes along, whatever it was taken for.
+                    pad_from = max(fs - int(cfg.judge_lead_s * SR), self._decided_floor(), self._wake_end, self._base)
+                else:
+                    pad_from = max(fs - int(cfg.pad_s * SR), self._last_other_end, self._decided_floor(),
+                                   self._wake_end)
                 if pad_from < fs:
                     self._release(pad_from, fs, events)
             elif self._pending_gap:
@@ -692,7 +921,8 @@ class Follow:
                 self.dropped_s += FRAME / SR
                 if not self._other_reported:
                     self._other_reported = True
-                    events.append({"type": "other_voice", "t": round(fs / SR, 3), "turn": self.turns})
+                    (self._tentative_events if self._tentative else events).append(
+                        {"type": "other_voice", "t": round(fs / SR, 3), "turn": self.turns})
         else:
             if self.in_turn:
                 self._pending_gap.append((fs, fe))
@@ -736,6 +966,10 @@ class Follow:
         self.in_turn = False
         self._pending_gap = []
         first = self.turns == 1
+        if first and self._first_turn is None:
+            # The user as this session heard them: what later turns are compared with, see ``_closer_to_other``.
+            self._first_turn = (max(self._turn_start - int(self.cfg.pad_s * SR), self._wake_end), self._last_user_end)
+            self._first_turn_end = self._last_user_end
         early = first and bool(self._held)
         if early:
             # Isolation keeps the voice of the voiceprint it is given: who the
@@ -743,7 +977,16 @@ class Follow:
             # their profile and not the wake word's guess, and a voice turned
             # away sends nothing.
             self._after_first_turn(events)
-        self._send_held(events)
+        tentative, self._tentative = self._tentative, False
+        waiting, self._tentative_events = self._tentative_events, []
+        mark = len(events)
+        if not self._send_held(events, judge=tentative):
+            # Judged not to be the user: as if no turn had started.
+            self.turns -= 1
+            self._last_other_end = max(self._last_other_end, self._last_user_end)
+            return
+        if tentative:
+            events[mark:mark] = [{"type": "turn_start", "t": round(self._turn_start / SR, 3), "turn": self.turns}, *waiting]
         events.append({"type": "turn_end", "t": round(self._last_user_end / SR, 3), "turn": self.turns,
                        "speech_s": round(self._turn_user_s, 2)})
         if first and not early:
@@ -767,23 +1010,40 @@ class Follow:
             return
         self._send(self._after_wake_word(chunk, a, events), a, events)
 
-    def _send_held(self, events: list[dict[str, Any]]) -> None:
+    def _send_held(self, events: list[dict[str, Any]], judge: bool = False) -> bool:
         """The turn's held audio, through the Voice Isolator when the user's
-        voiceprint is one it knows."""
+        voiceprint is one it knows. With ``judge`` (a turn after the first,
+        see ``judge_later_turns``) the turn is also judged on what comes back.
+        False when it was left out."""
         held, self._held = self._held, []
         if not held or self._rejected:
-            return
+            return True
         start, end = held[0][0], held[-1][1]
         span = self._audio(start, end).copy()
         if len(span) < end - start:  # older than the kept audio: can't happen within max_turn_s
-            return
+            return True
         voiceprint = self._ref if self.model.key == ISOLATOR_MODEL else None
+        if judge and voiceprint is not None:
+            m_ = self.model
+            if self._turn_peak < m_.other_threshold + self.cfg.next_turn_share * (m_.threshold - m_.other_threshold):
+                raw = self._raw_scores(start, end)
+                if "raw_user" in raw and raw["raw_user"] - raw["raw_other"] < self.cfg.judge_weak_margin:
+                    # By its checks already the session's other voice: not worth a run of Isolation.
+                    self.left_out += 1
+                    self.timeline.append({"t": round(end / SR, 3), "kind": "judged", "judged": True, "left_out": True,
+                                          "unheard": True, "peak": round(self._turn_peak, 3), **raw, "turn": self.turns})
+                    self._leave_out(held)
+                    return False
         if voiceprint is not None:
             t0 = time.perf_counter()
             # The isolator hears everything kept around the turn, up to now.
             ctx = max(self._base, start - int(self.cfg.isolation_context_s * SR))
+            look, self._look = self._look, None
             try:
-                around = self.isolator.clean(self._audio(ctx, self.n).copy(), voiceprint)
+                if look is not None and look[:2] == (ctx, self.n) and look[2] is voiceprint:
+                    around = look[3]  # what recognized the user is what goes out
+                else:
+                    around = self.isolator.clean(self._audio(ctx, self.n).copy(), voiceprint)
             except IsolationFailed as err:
                 # The GPU didn't answer (Vulkan image): the turn goes on as Trimming left it.
                 _LOG.warning("Isolation not used for this command: %s", err)
@@ -803,18 +1063,163 @@ class Follow:
             came_back = np.concatenate([cleaned_span[a - start:b - start] for a, b in held])
             kept_db = 20 * np.log10((float(np.sqrt(np.mean(came_back ** 2))) + 1e-9)
                                     / (float(np.sqrt(np.mean(went_in ** 2))) + 1e-9))
-            if kept_db < self.cfg.isolation_floor_db:
+            gone = kept_db < self.cfg.isolation_floor_db
+            m_ = self.model
+            strong = self._turn_peak >= m_.other_threshold + self.cfg.next_turn_share * (m_.threshold - m_.other_threshold)
+            if judge:
+                step.update(peak=round(self._turn_peak, 3), **self._raw_scores(start, end))
+            if judge and gone and (strong or not self.cfg.judge_retry_strong_only):
+                # Isolation answers a lone voice whole or not at all, and which one can turn on how
+                # much audio it is given. Before the user's words are given up: once more, on less.
+                # Only for speech that would have started a turn by its checks alone: the rest came
+                # in on the lower line and Isolation's first answer stands.
+                near = max(self._base, start - SR)
+                try:
+                    again = self.isolator.clean(self._audio(near, min(self.n, end + SR // 2)).copy(), voiceprint)
+                except IsolationFailed:
+                    again = None
+                if again is not None:
+                    back = np.concatenate([again[a - near:b - near] for a, b in held])
+                    db = 20 * np.log10((float(np.sqrt(np.mean(back ** 2))) + 1e-9)
+                                       / (float(np.sqrt(np.mean(went_in ** 2))) + 1e-9))
+                    if db >= self.cfg.isolation_floor_db:
+                        around, ctx, kept_db, gone = again, near, db, False
+                        cleaned_span = around[start - ctx:end - ctx]
+                        step.update(again=True)
+            if judge:
+                if gone:
+                    # Isolation hears none of the user in it, as it now and then does with a short command
+                    # of theirs: theirs if the turn as a whole reaches the line a turn starts on without
+                    # all this. It then goes on as Trimming left it, as such a turn always has.
+                    score = self._turn_score(self._buf, self._base, start, end)
+                    line = m_.other_threshold + self.cfg.next_turn_share * (m_.threshold - m_.other_threshold)
+                else:
+                    # What Isolation kept is judged where it kept the most: its loudest second and a half.
+                    la, lb = self._loudest(around, ctx, start, end)
+                    near_ = self._session_scores(around, ctx, la, lb)
+                    step.update(near_)
+                    score = max(self._turn_score(around, ctx, la, lb), near_.get("to_user", -1.0))
+                    if "to_other" in near_:
+                        score, line = score - near_["to_other"], self.cfg.judge_margin
+                    else:
+                        line = self.cfg.judge_line
+                step.update(judged=True, score=round(score, 3), line=round(line, 3))
+                if score < line:
+                    self.left_out += 1
+                    step.update(left_out=True, **({"kept_db": round(kept_db)} if gone else {}))
+                    self.timeline.append(step)
+                    self._leave_out(held)
+                    return False
+            if gone:
                 # Near silence for words Trimming took for the user's: not used.
                 self.isolation_skipped += 1
                 step.update(skipped=True, kept_db=round(kept_db))
             else:
                 span = cleaned_span
             self.timeline.append(step)
+        elif judge:
+            # No answer from Isolation to judge it on: the line a later turn starts on without it.
+            m = self.model
+            score = self._turn_score(self._buf, self._base, start, end)
+            line = m.other_threshold + self.cfg.next_turn_share * (m.threshold - m.other_threshold)
+            self.timeline.append({"t": round(end / SR, 3), "kind": "judged", "score": round(score, 3), "line": round(line, 3),
+                                  "left_out": score < line, "turn": self.turns})
+            if score < line:
+                self.left_out += 1
+                self._leave_out(held)
+                return False
         cleaned = self._after_wake_word(np.concatenate([span[a - start:b - start] for a, b in held]), start, events)
         # In pieces no bigger than the stream's own, so a whole turn doesn't
         # reach Home Assistant as one message.
         for i in range(0, len(cleaned), MAX_AUDIO_EVENT):
             self._send(cleaned[i:i + MAX_AUDIO_EVENT], start, events)
+        return True
+
+    def _turn_score(self, audio: np.ndarray, base: int, a: int, b: int) -> float:
+        """A turn scored as a whole against the voice being followed, with the
+        room around it as a short answer is (``_answer_audio``). ``audio`` is
+        what is scored, starting at sample ``base``: what the kiosk heard or
+        what Isolation made of it."""
+        n = min(len(audio), max(int(self.cfg.answer_window_s * SR), -(-(b - a) // QUANTUM) * QUANTUM))
+        lo = max(0, min((a + b) // 2 - n // 2 - base, len(audio) - n))
+        return float(self._ref @ self.embedder.embed(audio[lo:lo + n]))
+
+    def _raw_scores(self, a: int, b: int) -> dict[str, float]:
+        """The checks inside a held turn against the voices of this session, as the kiosk heard them."""
+        mine = [self._check_embs[c] for c, _ in self._checks if a <= c <= b and c in self._check_embs]
+        other = [self._check_embs[c] for c, sc in self._checks
+                 if sc < self.model.other_threshold and self._first_turn_end < c <= a - self._win // 2 and c in self._check_embs]
+        if not mine or len(other) < 2:
+            return {}
+        o = np.sum(other, axis=0)
+        o = o / max(float(np.linalg.norm(o)), 1e-9)
+        out = {"raw_other": round(float(np.mean([o @ e for e in mine])), 3)}
+        u = self._session_user()
+        if u is not None:
+            out["raw_user"] = round(float(np.mean([u @ e for e in mine])), 3)
+        return out
+
+    def _session_user(self) -> np.ndarray | None:
+        """The user as this session heard them: the wake word and the first
+        turn, one unit-length reference. The first turn is embedded the first
+        time it is needed."""
+        if self._first_turn is not None and self._first_turn_emb is None:
+            fa, fb = self._first_turn
+            if fa >= self._base and fb - fa >= SR // 2:
+                self._first_turn_emb = self.embedder.embed(self._audio(fa, fb))
+        user = [x for x in (self._anchor_emb, self._first_turn_emb) if x is not None]
+        if not user:
+            return None
+        u = np.sum(user, axis=0)
+        return u / max(float(np.linalg.norm(u)), 1e-9)
+
+    def _loudest(self, audio: np.ndarray, base: int, a: int, b: int) -> tuple[int, int]:
+        """The ``answer_window_s`` of ``audio`` between samples ``a`` and ``b``
+        with the most energy: where the voice Isolation kept is. A held turn
+        can be several seconds of which the user said one."""
+        n = int(self.cfg.answer_window_s * SR)
+        if b - a <= n:
+            return a, b
+        x = audio[a - base:b - base].astype(np.float64) ** 2
+        c = np.concatenate([[0.0], np.cumsum(x)])
+        hop = SR // 10
+        starts = np.arange(0, len(x) - n + 1, hop)
+        best = int(starts[int(np.argmax(c[starts + n] - c[starts]))])
+        return a + best, a + best + n
+
+    def _session_scores(self, audio: np.ndarray, base: int, a: int, b: int) -> dict[str, float]:
+        """What Isolation returned for a turn, against the voices of this
+        session: the user as heard in the wake word and first turn, and the
+        other voice as heard in the checks under the other-voice line."""
+        n = min(len(audio), max(int(self.cfg.answer_window_s * SR), -(-(b - a) // QUANTUM) * QUANTUM))
+        lo = max(0, min((a + b) // 2 - n // 2 - base, len(audio) - n))
+        e = self.embedder.embed(audio[lo:lo + n])
+        out: dict[str, float] = {}
+        u = self._session_user()
+        if u is not None:
+            out["to_user"] = round(float(u @ e), 3)
+        other = [self._check_embs[c] for c, sc in self._checks
+                 if sc < self.model.other_threshold and self._first_turn_end < c <= a - self._win // 2 and c in self._check_embs]
+        if len(other) >= 2:
+            o = np.sum(other, axis=0)
+            out["to_other"] = round(float(o @ e / max(float(np.linalg.norm(o)), 1e-9)), 3)
+        return out
+
+    def _leave_out(self, held: list[tuple[int, int]]) -> None:
+        """A held turn that turned out not to be the user's: nothing of it
+        goes to the assistant and it no longer counts as released."""
+        for a, b in held:
+            kept: list[tuple[int, int]] = []
+            for ra, rb in self.released:
+                if rb <= a or ra >= b:
+                    kept.append((ra, rb))
+                    continue
+                if ra < a:
+                    kept.append((ra, a))
+                if rb > b:
+                    kept.append((b, rb))
+            self.released = kept
+            self.dropped_s += (b - a) / SR
 
     def _send(self, chunk: np.ndarray, a: int, events: list[dict[str, Any]]) -> None:
         self._out_at = self.n
@@ -857,6 +1262,13 @@ class Follow:
             if not self._allowed(self._ids[best]):
                 self._reject(events, at, score)
         elif speech_s >= self.cfg.reject_after_s:
+            if self._strict and self.cfg.reject_late and self._wake_close:
+                # A wake word close to someone the device answers: decided at the end of the turn.
+                # A first look here, where the session used to be turned away, names a user who
+                # has said the command already, so a TV that talks on doesn't hold the turn open.
+                last = speech_s >= self.cfg.reject_late_s
+                if self._isolated_look(events, at, last=last) or not last:
+                    return
             self._identified = True
             self._set_speaker(None, score, None, events, at)
             if self._strict:
@@ -931,7 +1343,7 @@ class Follow:
             with_wake_word = len(self._anchor_speech) > 0
         if len(speech) < SR:
             if not self._identified and len(self._ids):
-                if self._second_look(events):
+                if self._second_look(events) or self._isolated_look(events, self._last_user_end, last=True):
                     return
                 if self._strict:
                     self._reject(events, self._last_user_end, None)
@@ -967,7 +1379,8 @@ class Follow:
                     if not self._allowed(self._ids[best]):
                         self._reject(events, self._last_user_end, score)
                     return
-            if len(self._ids) and self._second_look(events):
+            if len(self._ids) and (self._second_look(events)
+                                   or self._isolated_look(events, self._last_user_end, last=True)):
                 return
             self._set_speaker(None, score, None, events, self._last_user_end)
             if self._strict and len(self._ids):
@@ -1047,6 +1460,66 @@ class Follow:
         self._identified = True
         self._ref, self._ref_kind = self._rows[best], "person"
         self._set_speaker(None, score, "answer", events, at, line=line)
+        return True
+
+    def _isolated_look(self, events: list[dict[str, Any]], at: int, last: bool) -> bool:
+        """Before a held first turn is turned away (``reject_late``): the turn
+        through Isolation with the voiceprint of the closest person the device
+        answers, and the loudest ``answer_window_s`` of what comes back scored
+        as any recognition. Next to a TV as loud as the user, what the kiosk
+        heard is too much the TV to recognize them by, and what Isolation
+        keeps of it is not.
+
+        True when it named that person. Twice a session at most: once
+        ``reject_after_s`` of speech is in, and for the ``last`` time when the
+        turn ends or ``reject_late_s`` is in. Only with a wake word that came
+        close to them."""
+        if (not self.cfg.reject_late or not self._strict or self._likely is None or not self._wake_close
+                or self._looks >= (2 if last else 1)
+                or self.isolator is None or self.model.key != ISOLATOR_MODEL or not self._held):
+            return False
+        speech = sum(b - a for a, b in self._user_speech)
+        if self._looks and speech - self._look_speech < int(self.cfg.min_answer_s * SR):
+            return False  # nothing was said since the first look
+        self._looks, self._look_speech = (2 if last else 1), speech
+        held = list(self._held)
+        start, end = held[0][0], held[-1][1]
+        if start < self._base:
+            return False
+        row = self._rows[self._likely]
+        ctx = max(self._base, start - int(self.cfg.isolation_context_s * SR))
+        t0 = time.perf_counter()
+        try:
+            around = self.isolator.clean(self._audio(ctx, self.n).copy(), row)
+        except IsolationFailed as err:
+            _LOG.warning("Isolation not used to recognize this command: %s", err)
+            return False
+        ms = round((time.perf_counter() - t0) * 1000)
+        self.isolated_ms += ms
+        went_in = np.concatenate([self._audio(a, b) for a, b in held])
+        came_back = np.concatenate([around[a - ctx:b - ctx] for a, b in held])
+        kept_db = 20 * np.log10((float(np.sqrt(np.mean(came_back ** 2))) + 1e-9)
+                                / (float(np.sqrt(np.mean(went_in ** 2))) + 1e-9))
+        step = {"t": round(at / SR, 3), "kind": "identify", "id": self._ids[self._likely], "turn": self.turns,
+                "isolated": True, "ms": ms}
+        if kept_db < self.cfg.isolation_floor_db:
+            # It hears none of them in the turn.
+            self.timeline.append({**step, "kept_db": round(kept_db)})
+            return False
+        la, lb = self._loudest(around, ctx, start, end)
+        n = min(len(around), max(int(self.cfg.answer_window_s * SR), -(-(lb - la) // QUANTUM) * QUANTUM))
+        lo = max(0, min((la + lb) // 2 - n // 2 - ctx, len(around) - n))
+        scores = self._rows @ self.embedder.embed(around[lo:lo + n])
+        best = int(np.argmax(scores))
+        score = float(scores[best])
+        self.timeline.append({**step, "id": self._ids[best], "score": round(score, 3)})
+        by = self._named_by(scores, best) if best == self._likely else None
+        if not by:
+            return False
+        self._identified = True
+        self._ref, self._ref_kind = row, "person"
+        self._set_speaker(self._ids[best], score, by, events, at)
+        self._look = (ctx, self.n, row, around)
         return True
 
     def _named_by(self, scores: np.ndarray, best: int, by: str = "voice") -> str | None:

@@ -32,7 +32,6 @@ With **Isolation** on in the panel, under **Settings > Voice Match**, the comman
 
   Changing the model rebuilds everyone's voiceprint from the enrollment audio. Nobody has to record again.
 - **threads:** threads per check. `0` uses half the CPUs, up to 4.
-- **learn:** fold confident commands into each person's voiceprint, so it follows colds and room changes.
 - **keep_days:** how many days saved sessions are kept, for the Sessions page.
 - **keep_audio:** keep each session's audio, so it can be played back or added to a person.
 - **mdns_address:** optional. Kiosks find Ground Control at this machine's address on its main network, the one with the default route. Set an address only when kiosks can't reach that one, like kiosks on another VLAN this machine also has an address on. Every kiosk then gets that address instead.

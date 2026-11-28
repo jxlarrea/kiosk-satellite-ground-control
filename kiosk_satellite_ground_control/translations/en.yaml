@@ -7,9 +7,6 @@ configuration:
   threads:
     name: Threads
     description: Threads per check. 0 uses half the CPUs, up to 4.
-  learn:
-    name: Learn from commands
-    description: Fold confident commands into each person's voiceprint, so it follows colds and room changes.
   keep_days:
     name: Days to keep sessions
     description: How many days saved sessions stay on the Sessions page.

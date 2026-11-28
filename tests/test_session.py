@@ -25,7 +25,6 @@ def household(tmp_path_factory, speakers, voice, vad, embedder):
 
 
 def run(folks, embedder, vad, audio, **kw):
-    kw.setdefault("learn", False)
     s = Session(SessionConfig(**kw), ACCURATE, embedder, vad, folks)
     events = []
     for c in chunks(audio):
@@ -116,7 +115,7 @@ def test_anyone_lets_a_stranger_through(household, speakers, voice, vad, embedde
 
 def test_each_turn_checks_the_speaker_again(household, speakers, voice, vad, embedder):
     people, ana, leo = household
-    s = Session(SessionConfig(learn=False), ACCURATE, embedder, vad, people)
+    s = Session(SessionConfig(), ACCURATE, embedder, vad, people)
     gap = np.zeros(SR, dtype=np.float32)
     turn1, turn2 = [], []
     for c in chunks(np.concatenate([voice[speakers[0]]["test"][:4 * SR], gap])):
@@ -136,13 +135,16 @@ def test_only_person_without_a_voice(tmp_path, speakers, voice, vad, embedder):
     assert speaker["id"] == sam.id and speaker["by"] == "only_person"
 
 
-def test_confident_command_is_learned(tmp_path, speakers, voice, vad, embedder):
+def test_a_confident_command_is_not_added_to_the_voice(tmp_path, speakers, voice, vad, embedder):
+    """A voiceprint is only made from audio someone chose to add. A command,
+    however well recognized, carries whatever played in the room with it."""
     people = People(tmp_path, vad)
     ana, leo = people.add("Ana"), people.add("Leo")
     people.enroll(ana.id, voice[speakers[0]]["enroll"], {"accurate": embedder})
     people.enroll(leo.id, voice[speakers[1]]["enroll"], {"accurate": embedder})
-    before = len(people.clips(ana.id, "learned"))
+    before = people.voiceprints("accurate")[1].copy()
     events, _ = run(people, embedder, vad, np.concatenate([voice[speakers[0]]["test"][:5 * SR],
-                                                           np.zeros(SR, dtype=np.float32)]), learn=True)
-    assert first(events, "stats")["learned"] is True
-    assert len(people.clips(ana.id, "learned")) == before + 1
+                                                           np.zeros(SR, dtype=np.float32)]))
+    assert first(events, "speaker")["id"] == ana.id and "learned" not in first(events, "stats")
+    assert np.array_equal(people.voiceprints("accurate")[1], before)
+    assert not (tmp_path / "voices" / ana.id / "learned").exists()

@@ -43,12 +43,11 @@ These options are on the app's **Configuration** tab:
 | --- | --- | --- |
 | Speaker model | auto | `auto` picks Accurate on an x86 CPU with more than 4 cores or an Apple M-series chip. It picks Light on other ARM CPUs and smaller CPUs. Use `accurate` or `light` to set it. See [Speaker Models](voice-match.md#speaker-models). |
 | Threads | 0 | Threads per check. `0` uses half the CPUs with a maximum of 4. |
-| Learn from commands | on | Adds confident commands to each person's voiceprint so it stays accurate through colds and room changes. |
 | Days to keep sessions | 7 | How long saved sessions stay on the Sessions page. Set it from 1 to 90 days. |
 | Keep session audio | on | Keeps each session's audio, so it can be played back or added to a person. |
 | mDNS address | empty | Optional. See [Kiosks on Another Network](kiosks.md#kiosks-on-another-network). |
 
-You can also change the speaker model, learning and session keeping in the app's [Settings](settings.md). Those settings then take precedence over these options. The Vision Match models have no option here. Choose them in the app under **Settings > Vision Match**.
+You can also change the speaker model and session keeping in the app's [Settings](settings.md). Those settings then take precedence over these options. The Vision Match models have no option here. Choose them in the app under **Settings > Vision Match**.
 
 ### Files and Backups
 
@@ -251,7 +250,6 @@ Set `HA_TOKEN` to a long-lived access token to open the web app without logging 
 | `HA_TOKEN` | none | A long-lived Home Assistant access token. The web app opens without logging in for anyone who can reach the port. See [Skip the Login](#skip-the-login). |
 | `MODEL` | `auto` | The speaker model: `accurate`, `light` or `auto`. `auto` picks Accurate on an NVIDIA GPU, an Apple M-series chip or an x86 CPU with more than 4 cores and Light otherwise. The Vision Match models are chosen in the app under **Settings > Vision Match**. |
 | `THREADS` | half the CPUs, 1 to 4 | Threads per check. |
-| `LEARN` | `true` | Fold confident commands into each person's voiceprint. |
 | `KEEP_DAYS` | `7` | Days saved sessions are kept. |
 | `KEEP_AUDIO` | `true` | Keep each session's audio. |
 | `PORT` | `10900` | The port for kiosks and the web app. |

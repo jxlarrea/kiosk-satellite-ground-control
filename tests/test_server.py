@@ -133,14 +133,15 @@ def test_ingress_is_trusted_only_from_the_supervisor():
 
 
 async def test_settings_are_checked_and_kept(client, cfg):
-    r = await client.patch("/api/settings", json={"threshold": 0.55, "other_threshold": 0.3, "learn": False,
+    r = await client.patch("/api/settings", json={"threshold": 0.55, "other_threshold": 0.3,
                                                   "keep_days": 30, "keep_audio": False}, headers=GOOD)
     s = await r.json()
-    assert (s["threshold"], s["other_threshold"], s["learn"], s["keep_days"], s["keep_audio"]) == (0.55, 0.3, False, 30, False)
+    assert (s["threshold"], s["other_threshold"], s["keep_days"], s["keep_audio"]) == (0.55, 0.3, 30, False)
+    assert "learn" not in s
     assert (await client.patch("/api/settings", json={"other_threshold": 0.6}, headers=GOOD)).status == 400
     assert (await client.patch("/api/settings", json={"keep_days": 0}, headers=GOOD)).status == 400
     again = GroundControl(cfg)
-    assert again.model.threshold == 0.55 and again.learn is False and again.sessions.keep_days == 30
+    assert again.model.threshold == 0.55 and again.sessions.keep_days == 30
 
 
 def test_the_mdns_service_type_is_valid():

@@ -60,7 +60,7 @@ def embedder() -> Embedder:
 @pytest.fixture
 def cfg(tmp_path_factory) -> Config:
     return Config(data_dir=tmp_path_factory.mktemp("data"), models_dir=MODELS, model="accurate", threads=2,
-                  cuda=False, ha_url="http://ha.invalid", port=0, learn=True, auth="homeassistant")
+                  cuda=False, ha_url="http://ha.invalid", port=0, auth="homeassistant")
 
 
 def chunks(audio: np.ndarray, size: int = 1280):

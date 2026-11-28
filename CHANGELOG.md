@@ -2,6 +2,16 @@
 
 All notable changes to Kiosk Satellite Ground Control are documented here.
 
+## Unreleased
+
+### Changed
+- **Learn from commands is removed.** Ground Control no longer adds commands to a person's voice on its own. A command carries whatever plays in the room under it. A voiceprint made from commands heard next to a video took the video's voice for the user's. A voice is now only made from audio you chose to add: an enrollment or a session's speech added with **Use this voice**. The **Learn from commands** switch under **Settings > Voice Match**, the `LEARN` option and the app's `learn` option are gone. If a kiosk in a new room doesn't recognize someone well, enroll once more on that kiosk.
+- **Commands learned so far are deleted on the first start.** The commands that earlier versions added to voices are removed and the voiceprints of the people they were added to are built again from their enrollments alone. Enrollments and speech added with **Use this voice** are kept. The log says how many voices this changed.
+
+### Fixed
+- **A video's speech answered as a follow-up.** In a conversation next to a TV or video with a voice a little like the user's, a stretch of its speech could pass a voice check after the first command and reach the assistant as a turn of its own. With Isolation on, every turn after the first is now held until it ends, cleaned by Isolation and scored on what comes back. The user's turn goes to the assistant cleaned. Another voice's turn is left out and the kiosk is never told about it, so the assistant is not interrupted. Such a session shows **Another voice left out** under **Steps**. In 42 recorded sessions next to such a video, 29 of 31 follow-ups reached the assistant and none of the video's speech did. Before, 26 follow-ups and 7 stretches of the video did. A follow-up reaches the assistant about a second later than before. See [Another Voice After the First Command](docs/voice-match.md#another-voice-after-the-first-command).
+- **A command turned away before it was said.** A kiosk that answers chosen people turned a voice away once 2 seconds of speech after the wake word had named nobody. With a TV playing, those 2 seconds could be the TV's, heard while the user waited for a realtime assistant's ready chime. When the wake word came close to one of those people, the voice is now only turned away at the end of the command or after 6 seconds of speech. With Isolation on, a command that still names nobody is run through Isolation with that person's voiceprint and scored on what comes back. Five recorded commands that were turned away next to a video score 0.54 to 0.62 this way and 0.31 to 0.50 as the kiosk heard them. See [Recognition](docs/voice-match.md#recognition).
+
 ## v2026.11.17 - 2026-11-26
 
 ### Added

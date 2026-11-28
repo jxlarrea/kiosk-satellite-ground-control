@@ -91,7 +91,6 @@ class GroundControl:
         saved = self._saved()
         chosen = saved.get("model")
         self.status = Status(model=chosen if chosen in SPEAKER_MODELS else cfg.model)
-        self.learn = bool(saved.get("learn", cfg.learn))
         self.sessions.keep_days = int(saved.get("keep_days", cfg.keep_days))
         self.sessions.keep_audio = bool(saved.get("keep_audio", cfg.keep_audio))
         self.sessions.keep_frames = bool(saved.get("keep_frames", True))
@@ -115,6 +114,11 @@ class GroundControl:
         self._vision_error: str | None = None
         self._vision_lock = threading.Lock()
         self.active = self._load(self.status.model)
+        # Commands are no longer added to voices on their own. The ones that were are removed once.
+        cleared = self.people.clear_learned()
+        if cleared:
+            _LOG.info("removed the commands that were added to %d voice%s on their own, their voiceprints are built again "
+                      "from the enrollments", len(cleared), "" if len(cleared) == 1 else "s")
         if self.people.needs_rebuild(self.status.model):
             _LOG.info("building voiceprints for %s", self.status.model)
             self.people.rebuild(self.status.model, self.active)
@@ -162,7 +166,7 @@ class GroundControl:
                 "models": {k: v.label for k, v in SPEAKER_MODELS.items()},
                 "threshold": m.threshold, "other_threshold": m.other_threshold,
                 "default_threshold": base.threshold, "default_other_threshold": base.other_threshold,
-                "learn": self.learn, "keep_days": self.sessions.keep_days,
+                "keep_days": self.sessions.keep_days,
                 "keep_audio": self.sessions.keep_audio, "keep_frames": self.sessions.keep_frames, "cuda": self.cfg.cuda, "on_gpu": self.active.on_gpu,
                 "openvino": self._openvino.name if self._openvino is not None else None,
                 "vulkan": self._vulkan.name if self._vulkan is not None else None, "vulkan_slow": self._vulkan_slow,
@@ -193,7 +197,7 @@ class GroundControl:
                 "faces_enrolled": sum(1 for p in self.people.all() if self.faces.has_face(p.id))}
 
     def update_settings(self, values: dict[str, object]) -> None:
-        """Thresholds (for the active model), learning and session keeping. Checked, then saved."""
+        """Thresholds (for the active model) and session keeping. Checked, then saved."""
         saved = self._saved()
         thresholds = dict(saved.get("thresholds") or {})
         tuned = dict(thresholds.get(self.status.model) or {})
@@ -208,8 +212,6 @@ class GroundControl:
             raise ValueError("the other-voice threshold must be below the threshold")
         thresholds[self.status.model] = tuned
         out: dict[str, object] = {"thresholds": thresholds}
-        if "learn" in values:
-            self.learn = out["learn"] = bool(values["learn"])
         if "keep_days" in values:
             days = int(values["keep_days"])
             if not 1 <= days <= 90:
@@ -473,8 +475,6 @@ class GroundControl:
 
     def new_session(self, **options: object) -> Session:
         cfg = SessionConfig(**{k: v for k, v in options.items() if v is not None})
-        if not self.learn:
-            cfg.learn = False
         return Session(cfg, self.model, self.active, self.vad, self.people)
 
     def new_follow(self, policy: str = "anyone", anchor=None, people: tuple[str, ...] = (),

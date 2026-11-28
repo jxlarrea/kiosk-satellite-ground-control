@@ -60,7 +60,8 @@ function chart(record, total, color) {
   const pts = (record.timeline || []).filter((p) => p.t !== undefined && p.score !== undefined && p.kind !== "face"
     && (record.mode === "follow" || p.turn === 0 || p.turn === undefined)).map((p) => {
     const who = p.kind === "anchor" || p.kind === "identify";
-    const label = p.kind === "identify" && p.room ? "Who is speaking, scored on the turn and the room around it"
+    const label = p.kind === "identify" && p.isolated ? "Who is speaking, scored on the command after Isolation"
+      : p.kind === "identify" && p.room ? "Who is speaking, scored on the turn and the room around it"
       : p.kind === "identify" && p.wake_word ? "Who is speaking, scored on the wake word and the command"
       : p.kind === "check" && p.low ? "Not the user's voice" : POINT[p.kind] || "Check";
     return h("span", {
@@ -96,9 +97,11 @@ function steps(record) {
     if (e.type === "speech_start") out.push(["Speech started", "The voice check starts here.", e.t]);
     if (e.type === "speaker" && e.name) {
       const both = (record.timeline || []).some((p) => p.kind === "identify" && p.wake_word && p.score === e.score);
+      const isolated = (record.timeline || []).some((p) => p.kind === "identify" && p.isolated && p.score === e.score);
       out.push([`${e.name} recognized`, e.by === "only_person" ? "The only person enrolled. There was no voice to compare."
         : e.by === "conversation" ? "Recognized earlier in this conversation. Only their voice goes on."
         : e.by === "face" ? `Score ${e.score} is under the threshold. ${e.name}'s face was recognized at the kiosk, so the voice was taken for them.`
+        : isolated ? `Score ${e.score} on the command after Isolation. With another voice over it, the command as the kiosk heard it was under the threshold.`
         : both ? `Score ${e.score} from the wake word and the command together. The command alone was too short.` : `Score ${e.score}.`, e.t]);
     }
     if (e.type === "speaker" && !e.name && e.by === "answer") {
@@ -116,6 +119,12 @@ function steps(record) {
     if (e.type === "end_of_speech" && e.reason === "silence") out.push(["Speaker stopped", "Silence after the speech.", e.t]);
   }
   for (const p of record.timeline || []) {
+    if (p.kind === "voices" && p.kept_out) out.push(["Another voice kept out", `Speech here could have started a new turn by the voiceprint alone. Compared with the voices of this session, it was closer to the other voice heard in it (${p.other}) than to the user as heard in it (${p.user}), so no turn started.`, p.t]);
+    if (p.kind === "judged" && p.unheard) { out.push(["Another voice left out", "Speech here was held as a possible turn. Its voice checks were closer to the other voice heard in this session than to the user, so Isolation was not run on it and nothing went to the assistant.", p.t]); continue; }
+    if (p.kind === "judged" && p.left_out) { out.push(["Another voice left out", `Speech here was held as a possible turn and scored ${p.score} as a whole, under the ${p.line} it needs. Nothing went to the assistant.`, p.t]); continue; }
+    if (p.kind === "isolated" && p.left_out) { out.push(["Another voice left out", p.kept_db != null
+      ? `Speech here was held as a possible turn. Isolation found none of the user's voice in it and returned it ${Math.abs(p.kept_db)} dB quieter. As a whole it scored ${p.score}, under the ${p.line} it needs. Nothing went to the assistant.`
+      : `Speech here was held as a possible turn. What Isolation returned for it was not closer to the user than to the other voice heard in this session by the ${p.line} it needs (${p.score}). Nothing went to the assistant.`, p.t]); continue; }
     if (p.kind === "isolated" && p.failed) out.push(["Isolation not used", `The GPU didn't answer, so this part went to the assistant as Trimming left it, with other voices still under the user's words. Ground Control starts Isolation on the GPU again for the next command.`, p.t]);
     else if (p.kind === "isolated" && p.skipped) out.push(["Isolation not used", `Isolation returned this part ${Math.abs(p.kept_db)} dB quieter, as if the user wasn't talking in it. It went to the assistant as Trimming left it, with other voices still under the user's words. Isolation took ${p.ms} ms.`, p.t]);
     else if (p.kind === "isolated") out.push(["Isolation", `Other voices under the user's words were removed in ${p.ms} ms. The command went to the assistant after that.`, p.t]);
